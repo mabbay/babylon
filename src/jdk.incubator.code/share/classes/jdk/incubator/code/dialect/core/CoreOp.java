@@ -88,9 +88,11 @@ public sealed abstract class CoreOp extends Op {
 
         static final String NAME = "func";
         public static final String ATTRIBUTE_FUNC_NAME = NAME + ".name";
+        public static final String ATTRIBUTE_FUNC_REF = NAME + ".ref";
 
         final String funcName;
         final Body body;
+        final MethodRef ref;
 
         FuncOp(ExternalizedOp def) {
             if (!def.operands().isEmpty()) {
@@ -103,7 +105,14 @@ public sealed abstract class CoreOp extends Op {
                         case null, default -> throw new UnsupportedOperationException("Unsupported func name value:" + v);
                     });
 
-            this(funcName, def.bodyDefinitions().get(0));
+            MethodRef ref = def.extractAttributeValue(ATTRIBUTE_FUNC_REF, false,
+                    v -> switch (v) {
+                        case MethodRef r -> r;
+                        case null -> null;
+                        default -> throw new UnsupportedOperationException("Unsupported func ref value:" + v);
+                    });
+
+            this(funcName, def.bodyDefinitions().get(0), ref);
         }
 
         FuncOp(FuncOp that, CodeContext cc, CodeTransformer ot) {
@@ -111,6 +120,7 @@ public sealed abstract class CoreOp extends Op {
 
             this.funcName = that.funcName;
             this.body = that.body.transform(cc, ot).build(this);
+            this.ref = that.ref;
         }
 
         FuncOp(FuncOp that, String funcName, CodeContext cc, CodeTransformer ot) {
@@ -118,6 +128,7 @@ public sealed abstract class CoreOp extends Op {
 
             this.funcName = funcName;
             this.body = that.body.transform(cc, ot).build(this);
+            this.ref = that.ref;
         }
 
         @Override
@@ -138,6 +149,15 @@ public sealed abstract class CoreOp extends Op {
 
             this.funcName = funcName;
             this.body = bodyBuilder.build(this);
+            this.ref = null;
+        }
+
+        FuncOp(String funcName, Body.Builder body, MethodRef ref) {
+            super(List.of());
+
+            this.funcName = funcName;
+            this.body = body.build(this);
+            this.ref = ref;
         }
 
         @Override
@@ -147,7 +167,10 @@ public sealed abstract class CoreOp extends Op {
 
         @Override
         public Map<String, Object> externalize() {
-            return Map.of("", funcName);
+            return Map.of(
+                    "", funcName,
+                    ATTRIBUTE_FUNC_REF, ref
+            );
         }
 
         @Override
@@ -174,6 +197,10 @@ public sealed abstract class CoreOp extends Op {
         @Override
         public TypeElement resultType() {
             return JavaType.VOID;
+        }
+
+        public MethodRef ref() {
+            return ref;
         }
     }
 
@@ -1245,6 +1272,10 @@ public sealed abstract class CoreOp extends Op {
      */
     public static FuncOp func(String funcName, Body.Builder body) {
         return new FuncOp(funcName, body);
+    }
+
+    public static FuncOp func(String funcName, Body.Builder body, MethodRef mref) {
+        return new FuncOp(funcName, body, mref);
     }
 
     /**

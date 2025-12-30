@@ -794,6 +794,14 @@ public final class BytecodeGenerator {
                         push(op.result());
                     }
                     case InvokeOp op -> {
+                        Optional<FuncOp> opt = op.recursivelyInvokeRoot();
+                        if (opt.isPresent()) {
+                            processOperands(op.operands());
+                            FuncOp root = opt.get();
+                            cob.invokestatic(className, root.funcName(), MethodRef.toNominalDescriptor(root.invokableType()));
+                            push(op.result());
+                            break;
+                        }
                         // Resolve referenced class to determine if interface
                         MethodRef md = op.invokeDescriptor();
                         JavaType refType = (JavaType)md.refType();

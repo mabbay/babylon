@@ -788,6 +788,22 @@ public sealed abstract class JavaOp extends Op {
         public TypeElement resultType() {
             return resultType;
         }
+
+        public Optional<FuncOp> recursivelyInvokeRoot() {
+            Op rootOp = rootOp();
+            if (rootOp instanceof FuncOp fop && invokeDescriptor.equals(fop.ref())) {
+                return Optional.of(fop);
+            }
+            return Optional.empty();
+        }
+
+        private Op rootOp() {
+            Op root = this;
+            while (root.parent() != null) {
+                root = root.ancestorOp();
+            }
+            return root;
+        }
     }
 
     /**

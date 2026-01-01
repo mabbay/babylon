@@ -793,6 +793,35 @@ public final class BytecodeGenerator {
                         }
                         push(op.result());
                     }
+                    case SelfInvokeOp op -> {
+                        // invoke the method we are generating
+                        if (op.isVarargs()) {
+                            processOperands(op.argOperands());
+                            var varArgOperands = op.varArgOperands();
+                            cob.loadConstant(varArgOperands.size());
+                            var compType = ((ArrayType) op.descriptor().type().parameterTypes().getLast()).componentType();
+                            var compTypeDesc = compType.toNominalDescriptor();
+                            var typeKind = TypeKind.from(compTypeDesc);
+                            if (compTypeDesc.isPrimitive()) {
+                                cob.newarray(typeKind);
+                            } else {
+                                cob.anewarray(compTypeDesc);
+                            }
+                            for (int j = 0; j < varArgOperands.size(); j++) {
+                                // we duplicate array value on the stack to be consumed by arrayStore
+                                // after completion of this loop the array value will be on top of the stack
+                                cob.dup();
+                                cob.loadConstant(j);
+                                load(varArgOperands.get(j));
+                                cob.arrayStore(typeKind);
+                            }
+                        } else {
+                            processOperands(op);
+                        }
+                        FuncOp root = (FuncOp) blocks.getFirst().ancestorOp();
+                        cob.invokestatic(className, root.funcName(), MethodRef.toNominalDescriptor(root.invokableType()));
+                        push(op.result());
+                    }
                     case InvokeOp op -> {
                         // Resolve referenced class to determine if interface
                         MethodRef md = op.invokeDescriptor();

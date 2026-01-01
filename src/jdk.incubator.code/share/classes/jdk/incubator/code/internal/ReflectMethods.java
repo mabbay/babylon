@@ -1140,8 +1140,13 @@ public class ReflectMethods extends TreeTranslatorPrev {
                     args.addAll(scanMethodArguments(tree.args, tree.meth.type, tree.varargsElement));
 
                     MethodRef mr = symbolToMethodRef(sym, symbolSiteType(sym));
-                    Value res = append(JavaOp.invoke(ik, tree.varargsElement != null,
-                            typeToTypeElement(meth.type.getReturnType()), mr, args));
+                    TypeElement resultType = typeToTypeElement(meth.type.getReturnType());
+                    Value res;
+                    if (this.tree instanceof JCMethodDecl methodDecl && methodDecl.sym == sym) {
+                        res = append(JavaOp.selfInvoke(ik, tree.varargsElement != null, resultType, mr, args));
+                    } else {
+                        res = append(JavaOp.invoke(ik, tree.varargsElement != null, resultType, mr, args));
+                    }
                     if (sym.type.getReturnType().getTag() != TypeTag.VOID) {
                         result = res;
                     }
@@ -1173,9 +1178,14 @@ public class ReflectMethods extends TreeTranslatorPrev {
                     MethodRef mr = symbolToMethodRef(sym, qualifierTarget.hasTag(NONE) ?
                             access.selected.type : qualifierTarget);
                     JavaType returnType = typeToTypeElement(meth.type.getReturnType());
-                    JavaOp.InvokeOp iop = JavaOp.invoke(ik, tree.varargsElement != null,
-                            returnType, mr, args);
-                    Value res = append(iop);
+                    Value res;
+                    if (this.tree instanceof JCMethodDecl methodDecl && methodDecl.sym == sym) {
+                        res = append(JavaOp.selfInvoke(ik, tree.varargsElement != null, returnType, mr, args));
+                    } else {
+                        JavaOp.InvokeOp iop = JavaOp.invoke(ik, tree.varargsElement != null,
+                                returnType, mr, args);
+                        res = append(iop);
+                    }
                     if (sym.type.getReturnType().getTag() != TypeTag.VOID) {
                         result = res;
                     }

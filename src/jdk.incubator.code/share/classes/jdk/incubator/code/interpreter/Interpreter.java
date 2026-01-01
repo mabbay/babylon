@@ -463,6 +463,30 @@ public final class Interpreter {
                         new IllegalStateException(
                                 "Function " + name + " cannot be resolved: top level op is not a module"));
             }
+        } else if (o instanceof JavaOp.SelfInvokeOp sio) {
+            Op root = o;
+            while (!(root instanceof CoreOp.FuncOp)) {
+                root = root.ancestorOp();
+            }
+            // handle vararg
+            // if vararg -> collect vararg operands into an array
+            List<Object> args = new ArrayList<>();
+            args.addAll(sio.argOperands().stream().map(oc::getValue).toList());
+            if (sio.isVarargs()) {
+                JavaType componentType = ((ArrayType) sio.descriptor().type().parameterTypes().getLast()).componentType();
+                Class<?> c;
+                try {
+                    c = componentType.toNominalDescriptor().resolveConstantDesc(l);
+                } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException(e);
+                }
+                Object array = Array.newInstance(c, sio.varArgOperands().size());
+                for (int i = 0; i < sio.varArgOperands().size(); i++) {
+                    Array.set(array, i, oc.getValue(sio.varArgOperands().get(i)));
+                }
+                args.add(array);
+            }
+            return invoke(l, (CoreOp.FuncOp) root, args);
         } else if (o instanceof JavaOp.InvokeOp co) {
             MethodType target = resolveToMethodType(l, o.opType());
             MethodHandles.Lookup il = switch (co.invokeKind()) {

@@ -46,7 +46,6 @@ public class TestRecursiveFuncOp {
         Assertions.assertEquals("2,1,0", Interpreter.invoke(MethodHandles.lookup(), lowered, 2));
 
         MethodHandle mh = BytecodeGenerator.generate(MethodHandles.lookup(), lowered);
-        mh.invoke(2);
         Assertions.assertEquals("2,1,0", mh.invoke(2));
     }
 }

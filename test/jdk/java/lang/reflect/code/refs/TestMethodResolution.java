@@ -21,7 +21,7 @@
  * questions.
  */
 
-import jdk.incubator.code.dialect.java.JavaOp.InvokeOp.InvokeKind;
+import jdk.incubator.code.dialect.java.JavaOp.InvocationOp.InvokeKind;
 import jdk.incubator.code.dialect.java.MethodRef;
 import org.junit.jupiter.api.Test;
 

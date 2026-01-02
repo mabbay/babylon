@@ -468,21 +468,19 @@ public final class Interpreter {
             while (!(root instanceof CoreOp.FuncOp)) {
                 root = root.ancestorOp();
             }
-            // handle vararg
-            // if vararg -> collect vararg operands into an array
-            List<Object> args = new ArrayList<>();
-            args.addAll(sio.argOperands().stream().map(oc::getValue).toList());
-            if (sio.isVarargs()) {
-                JavaType componentType = ((ArrayType) sio.descriptor().type().parameterTypes().getLast()).componentType();
+            List<Object> args = new ArrayList<>(sio.argOperands().stream().map(oc::getValue).toList());
+            if (sio.isVarArgs()) {
+                JavaType componentType = ((ArrayType) sio.invokeDescriptor().type().parameterTypes().getLast()).componentType();
                 Class<?> c;
                 try {
                     c = componentType.toNominalDescriptor().resolveConstantDesc(l);
                 } catch (ReflectiveOperationException e) {
                     throw new RuntimeException(e);
                 }
-                Object array = Array.newInstance(c, sio.varArgOperands().size());
-                for (int i = 0; i < sio.varArgOperands().size(); i++) {
-                    Array.set(array, i, oc.getValue(sio.varArgOperands().get(i)));
+                List<Value> varArgOperands = sio.varArgOperands();
+                Object array = Array.newInstance(c, varArgOperands.size());
+                for (int i = 0; i < varArgOperands.size(); i++) {
+                    Array.set(array, i, oc.getValue(varArgOperands.get(i)));
                 }
                 args.add(array);
             }

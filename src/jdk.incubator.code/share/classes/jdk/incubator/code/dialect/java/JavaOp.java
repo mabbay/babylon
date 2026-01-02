@@ -96,7 +96,7 @@ public sealed abstract class JavaOp extends Op {
             FieldAccessOp.FieldLoadOp,
             FieldAccessOp.FieldStoreOp,
             InstanceOfOp,
-            InvokeOp,
+            InvocationOp,
             LambdaOp,
             NewOp,
             TestOperation,
@@ -114,7 +114,7 @@ public sealed abstract class JavaOp extends Op {
             ArrayAccessOp.ArrayStoreOp,
             AssertOp,
             FieldAccessOp.FieldStoreOp,
-            InvokeOp,
+            InvocationOp,
             NewOp,
             ReturnOp,
             ThrowOp,
@@ -621,148 +621,8 @@ public sealed abstract class JavaOp extends Op {
         }
     }
 
-    @OpDeclaration(SelfInvokeOp.NAME)
-    public static final class SelfInvokeOp extends JavaOp {
-        // resultType because of generic
-        // isVarargs because it's needed to handle the vararg operands
-        // mr and ik are used with vararg operations
-        private static final String NAME = "self.invoke";
-        private static final String ATTRIBUTE_SELF_INVOKE_VARARGS = NAME + ".vararg";
-        private static final String ATTRIBUTE_SELF_INVOKE_DESCRIPTOR = NAME + ".descriptor";
-        private static final String ATTRIBUTE_SELF_INVOKE_KIND = NAME + ".kind";
-
-        private final InvokeOp.InvokeKind ik;
-        private final boolean isVarargs;
-        private final TypeElement resultType;
-        private final MethodRef desc;
-
-        SelfInvokeOp(ExternalizedOp def) {
-            MethodRef desc = def.extractAttributeValue(ATTRIBUTE_SELF_INVOKE_DESCRIPTOR,
-                    false, v -> switch (v) {
-                        case MethodRef r -> r;
-                        case null, default ->
-                                throw new UnsupportedOperationException("Unsupported self invoke descriptor value:" + v);
-                    });
-
-            boolean isVarArgs = def.extractAttributeValue(ATTRIBUTE_SELF_INVOKE_VARARGS,
-                    false, v -> switch (v) {
-                        case Boolean b -> b;
-                        case null, default -> false;
-                    });
-
-            InvokeOp.InvokeKind ik = def.extractAttributeValue(ATTRIBUTE_SELF_INVOKE_KIND,
-                    false, v -> switch (v) {
-                        case String s -> InvokeOp.InvokeKind.valueOf(s);
-                        case InvokeOp.InvokeKind k -> k;
-                        case null, default -> {
-                            if (isVarArgs) {
-                                // If varargs then we cannot infer invoke kind
-                                throw new UnsupportedOperationException("Unsupported invoke kind value:" + v);
-                            }
-                            int paramCount = desc.type().parameterTypes().size();
-                            int argCount = def.operands().size();
-                            yield (argCount == paramCount + 1)
-                                    ? InvokeOp.InvokeKind.INSTANCE
-                                    : InvokeOp.InvokeKind.STATIC;
-                        }
-                    });
-
-
-            this(ik, isVarArgs, def.resultType(), desc, def.operands());
-        }
-
-        // don't we need info like kind and isVararg
-        // producing invoke instruction need them
-
-        // we don't need desc
-        // this op model recursion
-        // in interpreter we will reinterpret the root
-        // in BytecodeGen we will refer to the method of the root
-        // we need args
-        // result type can be computed from root
-
-        SelfInvokeOp(InvokeOp.InvokeKind ik, boolean isVarargs, TypeElement resultType, MethodRef desc, List<Value> args) {
-            // we need ref to drive info like resultType
-            // traversing the model to reach the root FuncOp won't work
-            // because in javac when we create this op, the root is not constructed yet
-            super(args);
-
-            InvokeOp.validateArgCount(ik, isVarargs, desc, args);
-
-            this.ik = ik;
-            this.isVarargs = isVarargs;
-            this.resultType = resultType;
-            this.desc = desc;
-        }
-
-        SelfInvokeOp(SelfInvokeOp that, CodeContext cc, CodeTransformer ot) {
-            super(that, cc);
-
-            this.ik = that.ik;
-            this.isVarargs = that.isVarargs;
-            this.resultType = that.resultType;
-            this.desc = that.desc;
-        }
-
-        @Override
-        public SelfInvokeOp transform(CodeContext cc, CodeTransformer ot) {
-            return new SelfInvokeOp(this, cc, ot);
-        }
-
-        public InvokeOp.InvokeKind invokeKind() {
-            return ik;
-        }
-
-        public boolean isVarargs() {
-            return isVarargs;
-        }
-
-        @Override
-        public TypeElement resultType() {
-            return resultType;
-        }
-
-        public MethodRef descriptor() {
-            return desc;
-        }
-
-        @Override
-        public Map<String, Object> externalize() {
-            return Map.of(
-                    ATTRIBUTE_SELF_INVOKE_VARARGS, isVarargs,
-                    ATTRIBUTE_SELF_INVOKE_DESCRIPTOR, desc,
-                    ATTRIBUTE_SELF_INVOKE_KIND, ik
-            );
-        }
-
-        public List<Value> varArgOperands() {
-            if (!isVarargs) {
-                return null;
-            }
-            int operandCount = operands().size();
-            int argCount = operandCount - (ik == InvokeOp.InvokeKind.STATIC ? 0 : 1);
-            int paramCount = desc.type().parameterTypes().size();
-            int varArgCount = argCount - (paramCount - 1);
-            return operands().subList(operandCount - varArgCount, operandCount);
-        }
-
-        public List<Value> argOperands() {
-            if (!isVarargs) {
-                return operands();
-            }
-            int paramCount = desc.type().parameterTypes().size();
-            int argOperandsCount = paramCount - (invokeKind() == InvokeOp.InvokeKind.STATIC ? 1 : 0);
-            return operands().subList(0, argOperandsCount);
-        }
-    }
-
-    /**
-     * The invoke operation, that can model Java language method invocation expressions.
-     */
-    @OpDeclaration(InvokeOp.NAME)
-    public static final class InvokeOp extends JavaOp
+    public static abstract sealed class InvocationOp extends JavaOp
             implements ReflectiveOp, JavaExpression, JavaStatement {
-
         /**
          * The kind of invocation.
          */
@@ -782,16 +642,17 @@ public sealed abstract class JavaOp extends Op {
         }
 
         static final String NAME = "invoke";
-        public static final String ATTRIBUTE_INVOKE_DESCRIPTOR = NAME + ".descriptor";
-        public static final String ATTRIBUTE_INVOKE_KIND = NAME + ".kind";
-        public static final String ATTRIBUTE_INVOKE_VARARGS = NAME + ".varargs";
 
-        final InvokeKind invokeKind;
-        final boolean isVarArgs;
-        final MethodRef invokeDescriptor;
-        final TypeElement resultType;
+        static final String ATTRIBUTE_INVOKE_DESCRIPTOR = NAME + ".descriptor";
+        static final String ATTRIBUTE_INVOKE_KIND = NAME + ".kind";
+        static final String ATTRIBUTE_INVOKE_VARARGS = NAME + ".varargs";
 
-        InvokeOp(ExternalizedOp def) {
+        InvokeOp.InvokeKind invokeKind;
+        boolean isVarArgs;
+        MethodRef invokeDescriptor;
+        TypeElement resultType;
+
+        InvocationOp(ExternalizedOp def) {
             // Required attribute
             MethodRef invokeDescriptor = def.extractAttributeValue(ATTRIBUTE_INVOKE_DESCRIPTOR,
                     true, v -> switch (v) {
@@ -809,10 +670,10 @@ public sealed abstract class JavaOp extends Op {
 
             // If not present and is not varargs defaults to class or instance invocation
             // based on number of operands and parameters
-            InvokeKind ik = def.extractAttributeValue(ATTRIBUTE_INVOKE_KIND,
+            InvokeOp.InvokeKind ik = def.extractAttributeValue(ATTRIBUTE_INVOKE_KIND,
                     false, v -> switch (v) {
-                        case String s -> InvokeKind.valueOf(s);
-                        case InvokeKind k -> k;
+                        case String s -> InvokeOp.InvokeKind.valueOf(s);
+                        case InvokeOp.InvokeKind k -> k;
                         case null, default -> {
                             if (isVarArgs) {
                                 // If varargs then we cannot infer invoke kind
@@ -821,16 +682,15 @@ public sealed abstract class JavaOp extends Op {
                             int paramCount = invokeDescriptor.type().parameterTypes().size();
                             int argCount = def.operands().size();
                             yield (argCount == paramCount + 1)
-                                    ? InvokeKind.INSTANCE
-                                    : InvokeKind.STATIC;
+                                    ? InvokeOp.InvokeKind.INSTANCE
+                                    : InvokeOp.InvokeKind.STATIC;
                         }
                     });
-
 
             this(ik, isVarArgs, def.resultType(), invokeDescriptor, def.operands());
         }
 
-        InvokeOp(InvokeOp that, CodeContext cc) {
+        InvocationOp(InvocationOp that, CodeContext cc) {
             super(that, cc);
 
             this.invokeKind = that.invokeKind;
@@ -839,12 +699,7 @@ public sealed abstract class JavaOp extends Op {
             this.resultType = that.resultType;
         }
 
-        @Override
-        public InvokeOp transform(CodeContext cc, CodeTransformer ot) {
-            return new InvokeOp(this, cc);
-        }
-
-        InvokeOp(InvokeKind invokeKind, boolean isVarArgs, TypeElement resultType, MethodRef invokeDescriptor, List<Value> args) {
+        InvocationOp(InvokeOp.InvokeKind invokeKind, boolean isVarArgs, TypeElement resultType, MethodRef invokeDescriptor, List<Value> args) {
             super(args);
 
             validateArgCount(invokeKind, isVarArgs, invokeDescriptor, args);
@@ -855,9 +710,9 @@ public sealed abstract class JavaOp extends Op {
             this.resultType = resultType;
         }
 
-        static void validateArgCount(InvokeKind invokeKind, boolean isVarArgs, MethodRef invokeDescriptor, List<Value> operands) {
+        static void validateArgCount(InvokeOp.InvokeKind invokeKind, boolean isVarArgs, MethodRef invokeDescriptor, List<Value> operands) {
             int paramCount = invokeDescriptor.type().parameterTypes().size();
-            int argCount = operands.size() - (invokeKind == InvokeKind.STATIC ? 0 : 1);
+            int argCount = operands.size() - (invokeKind == InvokeOp.InvokeKind.STATIC ? 0 : 1);
             if ((!isVarArgs && argCount != paramCount)
                     || argCount < paramCount - 1) {
                 throw new IllegalArgumentException(invokeKind + " " + isVarArgs + " " + invokeDescriptor);
@@ -875,13 +730,13 @@ public sealed abstract class JavaOp extends Op {
                 // receiver or a method argument
                 m.put(ATTRIBUTE_INVOKE_KIND, invokeKind);
                 m.put(ATTRIBUTE_INVOKE_VARARGS, isVarArgs);
-            } else if (invokeKind == InvokeKind.SUPER) {
+            } else if (invokeKind == InvokeOp.InvokeKind.SUPER) {
                 m.put(ATTRIBUTE_INVOKE_KIND, invokeKind);
             }
             return Collections.unmodifiableMap(m);
         }
 
-        public InvokeKind invokeKind() {
+        public InvokeOp.InvokeKind invokeKind() {
             return invokeKind;
         }
 
@@ -893,18 +748,13 @@ public sealed abstract class JavaOp extends Op {
             return invokeDescriptor;
         }
 
-        // @@@ remove?
-        public boolean hasReceiver() {
-            return invokeKind != InvokeKind.STATIC;
-        }
-
         public List<Value> varArgOperands() {
             if (!isVarArgs) {
                 return null;
             }
 
             int operandCount = operands().size();
-            int argCount = operandCount - (invokeKind == InvokeKind.STATIC ? 0 : 1);
+            int argCount = operandCount - (invokeKind == InvokeOp.InvokeKind.STATIC ? 0 : 1);
             int paramCount = invokeDescriptor.type().parameterTypes().size();
             int varArgCount = argCount - (paramCount - 1);
             return operands().subList(operandCount - varArgCount, operandCount);
@@ -915,13 +765,63 @@ public sealed abstract class JavaOp extends Op {
                 return operands();
             }
             int paramCount = invokeDescriptor().type().parameterTypes().size();
-            int argOperandsCount = paramCount - (invokeKind() == InvokeKind.STATIC ? 1 : 0);
+            int argOperandsCount = paramCount - (invokeKind() == InvokeOp.InvokeKind.STATIC ? 1 : 0);
             return operands().subList(0, argOperandsCount);
         }
 
         @Override
         public TypeElement resultType() {
             return resultType;
+        }
+    }
+
+    @OpDeclaration(SelfInvokeOp.NAME)
+    public static final class SelfInvokeOp extends InvocationOp {
+        private static final String NAME = "self.invoke";
+
+        SelfInvokeOp(ExternalizedOp def) {
+            super(def);
+        }
+
+        SelfInvokeOp(InvokeOp.InvokeKind ik, boolean isVarargs, TypeElement resultType, MethodRef desc, List<Value> args) {
+            super(ik, isVarargs, resultType, desc, args);
+        }
+
+        SelfInvokeOp(SelfInvokeOp that, CodeContext cc, CodeTransformer ot) {
+            super(that, cc);
+        }
+
+        @Override
+        public SelfInvokeOp transform(CodeContext cc, CodeTransformer ot) {
+            return new SelfInvokeOp(this, cc, ot);
+        }
+    }
+
+    /**
+     * The invoke operation, that can model Java language method invocation expressions.
+     */
+    @OpDeclaration(InvokeOp.NAME)
+    public static final class InvokeOp extends InvocationOp {
+        InvokeOp(ExternalizedOp def) {
+            super(def);
+        }
+
+        InvokeOp(InvokeOp that, CodeContext cc) {
+            super(that, cc);
+        }
+
+        @Override
+        public InvokeOp transform(CodeContext cc, CodeTransformer ot) {
+            return new InvokeOp(this, cc);
+        }
+
+        InvokeOp(InvokeKind invokeKind, boolean isVarArgs, TypeElement resultType, MethodRef invokeDescriptor, List<Value> args) {
+            super(invokeKind, isVarArgs, resultType, invokeDescriptor, args);
+        }
+
+        // @@@ remove?
+        public boolean hasReceiver() {
+            return invokeKind != InvokeKind.STATIC;
         }
     }
 

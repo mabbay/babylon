@@ -79,22 +79,19 @@ public class TestSelfInvokeOp {
 
         MethodHandle mh = BytecodeGenerator.generate(MethodHandles.lookup(), lowered);
         Assertions.assertEquals("2,1,0", mh.invoke(this, 2));
-        // bytecodegen produce static meth
-        // so reinvoking can be done with invokestatic
-        // what about vararg ?
     }
 
     @Reflect
     static String w(int v, int... a) {
         if (v < 0) {
-            return Arrays.toString(a);
+            return "$" + a.length;
         }
         // vararg invocation
         String r = "";
         r += w(-1);
         r += w(-1, 1);
         r += w(-1, 2, 3);
-        // non vararg invocation
+        // not vararg invocation
         r += w(-1, new int[] {4, 5, 6});
         return v + r;
     }
@@ -103,13 +100,21 @@ public class TestSelfInvokeOp {
     void testSelfInvokeWithVarArg() throws Throwable {
         Method m = this.getClass().getDeclaredMethod("w", int.class, int[].class);
         CoreOp.FuncOp funcOp = Op.ofMethod(m).get();
-        CoreOp.FuncOp lowered = funcOp.transform(CodeTransformer.LOWERING_TRANSFORMER);
+        CoreOp.FuncOp transformed = funcOp.transform((b, op) -> {
+            if (op instanceof CoreOp.ConstantOp cop && cop.resultType().equals(JavaType.J_L_STRING) && "$".equals(cop.value())) {
+                Op.Result r = b.op(constant(JavaType.J_L_STRING, "*"));
+                b.context().mapValue(op.result(), r);
+            } else {
+                b.op(op);
+            }
+            return b;
+        });
+        CoreOp.FuncOp lowered = transformed.transform(CodeTransformer.LOWERING_TRANSFORMER);
         System.out.println(lowered.toText());
 
-        System.out.println(w(2));
-        Assertions.assertEquals("2[][1][2, 3][4, 5, 6]", Interpreter.invoke(MethodHandles.lookup(), lowered, 2, new int[] {}));
+        Assertions.assertEquals("2*0*1*2*3", Interpreter.invoke(MethodHandles.lookup(), lowered, 2, new int[] {}));
 
         MethodHandle mh = BytecodeGenerator.generate(MethodHandles.lookup(), lowered);
-        Assertions.assertEquals("2[][1][2, 3][4, 5, 6]", mh.invoke(2, new int[] {}));
+        Assertions.assertEquals("2*0*1*2*3", mh.invoke(2, new int[] {}));
     }
 }

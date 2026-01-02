@@ -26,8 +26,7 @@
 package jdk.incubator.code.dialect.java.impl;
 
 import jdk.incubator.code.dialect.java.ArrayType;
-import jdk.incubator.code.dialect.java.JavaOp;
-import jdk.incubator.code.dialect.java.JavaOp.InvokeOp.InvokeKind;
+import jdk.incubator.code.dialect.java.JavaOp.InvocationOp.InvokeKind;
 import jdk.incubator.code.dialect.java.MethodRef;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -77,11 +76,11 @@ public record MethodRefImpl(TypeElement refType, String name, FunctionType type)
     }
 
     @Override
-    public MethodHandle resolveToHandle(MethodHandles.Lookup l, JavaOp.InvokeOp.InvokeKind kind) throws ReflectiveOperationException {
+    public MethodHandle resolveToHandle(MethodHandles.Lookup l, InvokeKind kind) throws ReflectiveOperationException {
         if (!isConstructor()) {
             return ResolutionHelper.resolveMethod(l, this, kind);
         } else {
-            if (kind != JavaOp.InvokeOp.InvokeKind.SUPER) {
+            if (kind != InvokeKind.SUPER) {
                 throw new IllegalArgumentException("Bad invoke kind for constructor: " + kind);
             }
             return resolveToConstructorHandle(l);

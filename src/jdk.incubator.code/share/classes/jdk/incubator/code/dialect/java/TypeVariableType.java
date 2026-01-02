@@ -26,9 +26,7 @@
 package jdk.incubator.code.dialect.java;
 
 import jdk.incubator.code.TypeElement;
-import jdk.incubator.code.dialect.java.JavaOp.InvokeOp.InvokeKind;
 import jdk.incubator.code.dialect.java.impl.JavaTypeUtils;
-import jdk.incubator.code.dialect.java.impl.MethodRefImpl;
 import jdk.incubator.code.extern.ExternalizedTypeElement;
 
 import java.lang.constant.ClassDesc;

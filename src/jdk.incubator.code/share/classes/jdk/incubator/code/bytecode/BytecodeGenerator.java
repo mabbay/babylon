@@ -794,12 +794,11 @@ public final class BytecodeGenerator {
                         push(op.result());
                     }
                     case SelfInvokeOp op -> {
-                        // invoke the method we are generating
-                        if (op.isVarargs()) {
+                        if (op.isVarArgs()) {
                             processOperands(op.argOperands());
                             var varArgOperands = op.varArgOperands();
                             cob.loadConstant(varArgOperands.size());
-                            var compType = ((ArrayType) op.descriptor().type().parameterTypes().getLast()).componentType();
+                            var compType = ((ArrayType) op.invokeDescriptor().type().parameterTypes().getLast()).componentType();
                             var compTypeDesc = compType.toNominalDescriptor();
                             var typeKind = TypeKind.from(compTypeDesc);
                             if (compTypeDesc.isPrimitive()) {
@@ -819,6 +818,7 @@ public final class BytecodeGenerator {
                             processOperands(op);
                         }
                         FuncOp root = (FuncOp) blocks.getFirst().ancestorOp();
+                        // the method we generate is static, so we use invokestatic
                         cob.invokestatic(className, root.funcName(), MethodRef.toNominalDescriptor(root.invokableType()));
                         push(op.result());
                     }

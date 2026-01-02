@@ -29,7 +29,7 @@ import java.lang.constant.ClassDesc;
 import java.lang.constant.MethodTypeDesc;
 
 import jdk.incubator.code.dialect.core.CoreType;
-import jdk.incubator.code.dialect.java.JavaOp.InvokeOp.InvokeKind;
+import jdk.incubator.code.dialect.java.JavaOp.InvocationOp.InvokeKind;
 import jdk.incubator.code.dialect.java.impl.MethodRefImpl;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -120,7 +120,7 @@ public sealed interface MethodRef extends JavaRef, TypeVariableType.Owner
      * @throws ReflectiveOperationException if a resolution error occurs
      * @throws IllegalArgumentException if the provided {@code kind} is unsupported for this method reference
      */
-    MethodHandle resolveToHandle(MethodHandles.Lookup l, JavaOp.InvokeOp.InvokeKind kind) throws ReflectiveOperationException;
+    MethodHandle resolveToHandle(MethodHandles.Lookup l, InvokeKind kind) throws ReflectiveOperationException;
 
     // Method factories
 

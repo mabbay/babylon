@@ -3,7 +3,7 @@ package jdk.incubator.code.dialect.java.impl;
 import jdk.incubator.code.TypeElement;
 import jdk.incubator.code.dialect.core.FunctionType;
 import jdk.incubator.code.dialect.java.FieldRef;
-import jdk.incubator.code.dialect.java.JavaOp.InvokeOp.InvokeKind;
+import jdk.incubator.code.dialect.java.JavaOp.InvocationOp.InvokeKind;
 import jdk.incubator.code.dialect.java.JavaType;
 import jdk.incubator.code.dialect.java.MethodRef;
 
